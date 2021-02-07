@@ -59,8 +59,10 @@ int pam_sm_authenticate(pam_handle_t* pamh, __attribute__((unused)) int flags,
 
     status = pam_get_item(pamh, PAM_AUTHTOK, (const void**)&pass);
 
-    if (status != PAM_SUCCESS)
+    if (status != PAM_SUCCESS) {
+        pam_syslog(pamh, LOG_ERR, "pam_get_item returned %u when trying to get password", status);
         return status;
+    }
 
     status = pam_get_item(pamh, PAM_USER, (const void**)&user);
     if (status != PAM_SUCCESS) {
@@ -85,7 +87,9 @@ int pam_sm_authenticate(pam_handle_t* pamh, __attribute__((unused)) int flags,
 
     free(pw_utf16);
 
-    key = add_key("user", "nthash", md4, sizeof(md4), KEY_SPEC_SESSION_KEYRING);
+    // FIXME - don't clobber existing password on su
+
+    key = add_key("user", "nthash", md4, sizeof(md4), KEY_SPEC_USER_SESSION_KEYRING);
 
     if (key == -1) {
         pam_syslog(pamh, LOG_ERR, "Error adding nthash to keyring (add_key returned error %i)", errno);
