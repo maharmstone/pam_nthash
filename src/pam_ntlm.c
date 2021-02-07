@@ -51,6 +51,7 @@ int pam_sm_authenticate(pam_handle_t* pamh, __attribute__((unused)) int flags,
     int status;
     const char* pass;
     const char* user = NULL;
+    const char* service;
     key_serial_t key;
     char16_t* pw_utf16;
     size_t len;
@@ -61,13 +62,19 @@ int pam_sm_authenticate(pam_handle_t* pamh, __attribute__((unused)) int flags,
 
     if (status != PAM_SUCCESS) {
         pam_syslog(pamh, LOG_ERR, "pam_get_item returned %u when trying to get password", status);
-        return status;
+        return PAM_SUCCESS;
     }
 
     status = pam_get_item(pamh, PAM_USER, (const void**)&user);
     if (status != PAM_SUCCESS) {
         pam_syslog(pamh, LOG_ERR, "Error getting name of user logging in.");
         return PAM_SUCCESS;
+    }
+
+    if (pam_get_item(pamh, PAM_SERVICE, (const void**)&service) == PAM_SUCCESS) {
+        // su runs in the session of the calling user - make sure we don't clobber the non-root nthash
+        if (service && !strcmp(service, "su"))
+            return PAM_SUCCESS;
     }
 
     // FIXME - make sure not done if previous module failed
@@ -87,8 +94,6 @@ int pam_sm_authenticate(pam_handle_t* pamh, __attribute__((unused)) int flags,
 
     free(pw_utf16);
 
-    // FIXME - don't clobber existing password on su
-
     key = add_key("user", "nthash", md4, sizeof(md4), KEY_SPEC_USER_SESSION_KEYRING);
 
     if (key == -1) {
@@ -96,7 +101,7 @@ int pam_sm_authenticate(pam_handle_t* pamh, __attribute__((unused)) int flags,
         return PAM_SUCCESS;
     }
 
-    pam_syslog(pamh, LOG_ERR, "Added nthash key %u for %s.", key, user ? user : "(unknown user)");
+    pam_syslog(pamh, LOG_ERR, "added nthash key %u for %s", key, user ? user : "(unknown user)");
 
     return PAM_SUCCESS;
 }
