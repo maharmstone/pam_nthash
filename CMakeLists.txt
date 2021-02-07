@@ -9,9 +9,13 @@ set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(SRC_FILES
 	src/pam_ntlm.c)
 
+find_package(ICU COMPONENTS uc REQUIRED)
+
 add_library(pam_ntlm SHARED ${SRC_FILES})
 
 set_target_properties(pam_ntlm PROPERTIES PREFIX "")
 
 target_compile_options(pam_ntlm PUBLIC -Wall -Werror=cast-function-type -Wno-expansion-to-defined -Wunused-parameter -Wtype-limits -Wextra -Wconversion)
+
 target_link_libraries(pam_ntlm keyutils)
+target_link_libraries(pam_ntlm ICU::uc)
