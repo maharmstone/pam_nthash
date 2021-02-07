@@ -16,9 +16,6 @@ int pam_sm_authenticate(__attribute__((unused)) pam_handle_t* pamh, __attribute_
     const char* pass;
     const char* user = NULL;
     key_serial_t key;
-    uid_t uid, oeuid;
-    gid_t gid, oegid;
-    char key_name[20];
 
     status = pam_get_item(pamh, PAM_AUTHTOK, (const void**)&pass);
 
@@ -26,16 +23,7 @@ int pam_sm_authenticate(__attribute__((unused)) pam_handle_t* pamh, __attribute_
         return status;
 
     status = pam_get_item(pamh, PAM_USER, (const void**)&user);
-    if (status == PAM_SUCCESS) {
-        struct passwd* pwd = getpwnam(user);
-        if (pwd) {
-            uid = pwd->pw_uid;
-            gid = pwd->pw_gid;
-        } else {
-            pam_syslog(pamh, LOG_ERR, "getpwnam returned NULL for %s", user);
-            return PAM_SUCCESS;
-        }
-    } else {
+    if (status != PAM_SUCCESS) {
         pam_syslog(pamh, LOG_ERR, "Error getting name of user logging in.");
         return PAM_SUCCESS;
     }
@@ -44,39 +32,15 @@ int pam_sm_authenticate(__attribute__((unused)) pam_handle_t* pamh, __attribute_
 
     // FIXME - calculate NT hash
 
-    // FIXME - make sure removed when logging out
     // FIXME - make sure updated when password changed
 
-    sprintf(key_name, "nthash.%u", uid);
-
-    oeuid = geteuid();
-    oegid = getegid();
-
-    if (seteuid(uid)) {
-        pam_syslog(pamh, LOG_ERR, "seteuid failed (error %u)", errno);
-        return PAM_SUCCESS;
-    }
-
-    if (setegid(gid)) {
-        seteuid(oeuid);
-        pam_syslog(pamh, LOG_ERR, "seteuid failed (error %u)", errno);
-        return PAM_SUCCESS;
-    }
-
-    // FIXME - get user keyring
-
     // FIXME - payload should be NT hash
-    key = add_key("user", key_name, "hello", 5, KEY_SPEC_USER_KEYRING);
+    key = add_key("user", "nthash", "hello", 5, KEY_SPEC_SESSION_KEYRING);
 
     if (key == -1) {
-        setegid(oegid);
-        seteuid(oeuid);
-        pam_syslog(pamh, LOG_ERR, "Error adding nthash to keyring (add_key returned error %u)", errno);
+        pam_syslog(pamh, LOG_ERR, "Error adding nthash to keyring (add_key returned error %i)", errno);
         return PAM_SUCCESS;
     }
-
-    setegid(oegid);
-    seteuid(oeuid);
 
     pam_syslog(pamh, LOG_ERR, "Added nthash key %u for %s.", key, user ? user : "(unknown user)");
 
