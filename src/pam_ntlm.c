@@ -12,6 +12,7 @@
 #include <unicode/ucnv.h>
 #include <stdlib.h>
 #include <string.h>
+#include "md4.h"
 
 static char16_t* utf8_to_utf16(pam_handle_t* pamh, const char* s, size_t* retlen) {
     UErrorCode status = U_ZERO_ERROR;
@@ -53,6 +54,8 @@ int pam_sm_authenticate(pam_handle_t* pamh, __attribute__((unused)) int flags,
     key_serial_t key;
     char16_t* pw_utf16;
     size_t len;
+    MD4_CTX ctx;
+    uint8_t md4[16];
 
     status = pam_get_item(pamh, PAM_AUTHTOK, (const void**)&pass);
 
@@ -66,28 +69,30 @@ int pam_sm_authenticate(pam_handle_t* pamh, __attribute__((unused)) int flags,
     }
 
     // FIXME - make sure not done if previous module failed
-
-    // FIXME - calculate NT hash by MD4'ing UTF-16
-
     // FIXME - make sure updated when password changed
-    pw_utf16 = utf8_to_utf16(pamh, "hello", &len); // FIXME - should be password
+
+    // change to UTF-16
+
+    pw_utf16 = utf8_to_utf16(pamh, pass, &len);
     if (!pw_utf16)
         return PAM_SUCCESS;
 
-    // FIXME - payload should be NT hash
-    key = add_key("user", "nthash", pw_utf16, len, KEY_SPEC_SESSION_KEYRING);
+    // calculate NT hash by MD4'ing UTF-16
 
-    if (key == -1) {
-        pam_syslog(pamh, LOG_ERR, "Error adding nthash to keyring (add_key returned error %i)", errno);
-        free(pw_utf16);
-        return PAM_SUCCESS;
-    }
+    MD4_Init(&ctx);
+    MD4_Update(&ctx, pw_utf16, (unsigned int)len);
+    MD4_Final(md4, &ctx);
 
     free(pw_utf16);
 
-    pam_syslog(pamh, LOG_ERR, "Added nthash key %u for %s.", key, user ? user : "(unknown user)");
+    key = add_key("user", "nthash", md4, sizeof(md4), KEY_SPEC_SESSION_KEYRING);
 
-    // FIXME
+    if (key == -1) {
+        pam_syslog(pamh, LOG_ERR, "Error adding nthash to keyring (add_key returned error %i)", errno);
+        return PAM_SUCCESS;
+    }
+
+    pam_syslog(pamh, LOG_ERR, "Added nthash key %u for %s.", key, user ? user : "(unknown user)");
 
     return PAM_SUCCESS;
 }

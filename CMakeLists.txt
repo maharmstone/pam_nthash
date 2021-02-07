@@ -7,7 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 
 set(SRC_FILES
-	src/pam_ntlm.c)
+	src/pam_ntlm.c
+	src/md4.c)
 
 find_package(ICU COMPONENTS uc REQUIRED)
 
